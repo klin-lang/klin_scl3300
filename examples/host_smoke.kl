@@ -1,0 +1,10 @@
+module app
+import klin_scl3300 scl
+
+fn main() {
+    printf("klin_scl3300 %d\n", scl.version())
+    printf("whoami %d\n", scl.whoami_id())
+    printf("crc %d\n", scl.crc8_frame(0x040000F7))
+    printf("ang_mdeg %d\n", scl.angle_mdeg(3976))
+    printf("mode4 %d\n", scl.cmd_mode4())
+}

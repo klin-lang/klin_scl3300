@@ -1,0 +1,65 @@
+module klin_scl3300
+
+/// Pack a 32-bit SPI word as `i32` bits (high 16 | low 16).
+pub fn word32(hi: i32, lo: i32): i32 {
+    return (hi << 16) | (lo & 65535)
+}
+
+fn bit_at(frame: i32, bit: i32): i32 {
+    let mask = 1 << bit
+    if (frame & mask) != 0 {
+        return 1
+    }
+    return 0
+}
+
+/// Murata SCL3300 CRC-8 (poly `0x1D`, init `0xFF`, invert). Bits 31..=8 only.
+pub fn crc8_frame(frame: i32): i32 {
+    let mut crc: i32 = 255
+    let mut bit: i32 = 31
+    while bit > 7 {
+        crc = crc8_bit(bit_at(frame, bit), crc)
+        bit = bit - 1
+    }
+    return (~crc) & 255
+}
+
+fn crc8_bit(bit_value: i32, crc_in: i32): i32 {
+    let mut crc = crc_in & 255
+    let mut temp = crc & 128
+    if bit_value == 1 {
+        temp = temp ^ 128
+    }
+    crc = (crc << 1) & 255
+    if temp != 0 {
+        crc = crc ^ 29
+    }
+    return crc
+}
+
+/// 16-bit payload in bits 23..=8.
+pub fn frame_data(frame: i32): i32 {
+    return (frame >> 8) & 65535
+}
+
+/// MISO return-status in bits 25..=24. `1` = no error.
+pub fn frame_rs(frame: i32): i32 {
+    return (frame >> 24) & 3
+}
+
+pub fn frame_crc_ok(frame: i32): bool {
+    return crc8_frame(frame) == (frame & 255)
+}
+
+pub fn frame_rs_ok(frame: i32): bool {
+    return frame_rs(frame) == 1
+}
+
+/// Sign-extend the 16-bit register word.
+pub fn sign16(raw: i32): i32 {
+    let v = raw & 65535
+    if v > 32767 {
+        return v - 65536
+    }
+    return v
+}

@@ -1,0 +1,89 @@
+module klin_scl3300
+import testing
+
+struct Rec {
+    last: [16]i32
+    n: i32
+    replies: [16]i32
+    ri: i32
+    delays: i32
+}
+
+fn rec_xfer(ctx: *mut u8, word: i32): i32 {
+    let r = cast(*mut Rec, ctx)
+    if (*r).n < 16 {
+        (*r).last[(*r).n] = word
+    }
+    (*r).n = (*r).n + 1
+    if (*r).ri < 16 {
+        let out = (*r).replies[(*r).ri]
+        (*r).ri = (*r).ri + 1
+        return out
+    }
+    return 0
+}
+
+fn rec_delay(ctx: *mut u8, ms: i32) {
+    let r = cast(*mut Rec, ctx)
+    (*r).delays = (*r).delays + ms
+}
+
+fn mock_wire(rec: *mut Rec): Wire {
+    return Wire{ ctx: cast(*mut u8, rec), xfer: rec_xfer, delay_ms: rec_delay }
+}
+
+fn test_version() {
+    testing.assert_eq_i32(version(), 1)
+}
+
+fn test_crc_datasheet() {
+    testing.assert_eq_i32(crc8_frame(0x040000F7), 247)
+    testing.assert(frame_crc_ok(0x040000F7))
+    testing.assert_eq_i32(crc8_frame(0x0500DC1C), 28)
+    testing.assert(frame_crc_ok(0x0500DC1C))
+    testing.assert_eq_i32(frame_data(0x0500DC1C), 220)
+    testing.assert_eq_i32(frame_rs(0x0500DC1C), 1)
+}
+
+fn test_conv_datasheet() {
+    testing.assert_eq_i32(angle_mdeg(3976), 21840)
+    testing.assert_eq_i32(accel_mg(220, 1), 36)
+    testing.assert_eq_i32(temp_mC(5662), 26576)
+    testing.assert_eq_i32(clamp_mode(0), 4)
+    testing.assert_eq_i32(clamp_mode(4), 4)
+}
+
+fn test_attach_mode4() {
+    let mut rec = Rec{ last: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], n: 0, replies: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], ri: 0, delays: 0 }
+    let dev = attach(mock_wire(&rec), 4)
+    testing.assert_eq_i32(dev.mode, 4)
+    testing.assert_eq_i32(rec.last[0], cmd_bank0())
+    testing.assert_eq_i32(rec.last[1], cmd_sw_reset())
+    testing.assert_eq_i32(rec.last[2], cmd_mode4())
+    testing.assert_eq_i32(rec.last[3], cmd_ena_ang())
+    testing.assert(rec.delays >= 102)
+}
+
+fn test_read_angles() {
+    let mut rec = Rec{ last: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], n: 0, replies: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], ri: 0, delays: 0 }
+    let dev = attach(mock_wire(&rec), 4)
+    rec.n = 0
+    rec.ri = 0
+    rec.replies[0] = 0
+    rec.replies[1] = 0
+    rec.replies[2] = 0x0500DC1C
+    rec.replies[3] = 0x09000000
+    rec.replies[4] = 0x0D000000
+    rec.replies[5] = 0x11000000
+    rec.replies[6] = 0x15161E0A
+    rec.replies[7] = 0x250F8825
+    rec.replies[8] = 0x250F8825
+    rec.replies[9] = 0x250F8825
+    rec.replies[10] = 0x19000000
+    rec.replies[11] = word32(0x4000, 0xC100)
+    let s = dev.read()
+    testing.assert_eq_i32(s.acc_x, 220)
+    testing.assert_eq_i32(s.temp, 5662)
+    testing.assert_eq_i32(s.ang_x, 3976)
+    testing.assert_eq_i32(angle_mdeg(s.ang_x), 21840)
+}

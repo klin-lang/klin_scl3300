@@ -1,0 +1,33 @@
+module klin_scl3300
+
+/// Angle millidegrees. Datasheet: `raw / 2^14 * 90`. `5625/1024` = `90000/16384`.
+pub fn angle_mdeg(raw: i32): i32 {
+    return (sign16(raw) * 5625) / 1024
+}
+
+/// Same as `angle_mdeg`, wrapped into `0..=359999`.
+pub fn angle_mdeg_360(raw: i32): i32 {
+    let mut d = angle_mdeg(raw)
+    if d < 0 {
+        d = d + 360000
+    }
+    return d
+}
+
+/// Acceleration in milli-g. Sensitivity is mode-dependent (LSB/g).
+pub fn accel_mg(raw: i32, mode: i32): i32 {
+    let v = sign16(raw)
+    if mode == 1 {
+        return (v * 1000) / 6000
+    }
+    if mode == 2 {
+        return (v * 1000) / 3000
+    }
+    return (v * 1000) / 12000
+}
+
+/// Temperature milli-°C. Datasheet: `-273 + TEMP/18.9`.
+pub fn temp_mC(raw: i32): i32 {
+    let v = sign16(raw)
+    return (v * 10000) / 189 - 273000
+}
