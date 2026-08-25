@@ -33,7 +33,7 @@ fn mock_wire(rec: *mut Rec): Wire {
 }
 
 fn test_version() {
-    testing.assert_eq_i32(version(), 1)
+    testing.assert_eq_i32(version(), 2)
 }
 
 fn test_crc_datasheet() {
@@ -86,4 +86,40 @@ fn test_read_angles() {
     testing.assert_eq_i32(s.temp, 5662)
     testing.assert_eq_i32(s.ang_x, 3976)
     testing.assert_eq_i32(angle_mdeg(s.ang_x), 21840)
+}
+
+fn test_set_mode_and_reset() {
+    let mut rec = Rec{ last: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], n: 0, replies: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], ri: 0, delays: 0 }
+    let mut dev = attach(mock_wire(&rec), 4)
+    rec.n = 0
+    dev.set_mode(1)
+    testing.assert_eq_i32(dev.mode, 1)
+    testing.assert_eq_i32(rec.last[0], cmd_mode1())
+    rec.n = 0
+    dev.reset()
+    testing.assert_eq_i32(rec.last[0], cmd_bank0())
+    testing.assert_eq_i32(rec.last[1], cmd_sw_reset())
+    testing.assert_eq_i32(rec.last[2], cmd_mode1())
+}
+
+fn test_err_flags_and_serial() {
+    let mut rec = Rec{ last: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], n: 0, replies: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], ri: 0, delays: 0 }
+    let dev = attach(mock_wire(&rec), 4)
+    rec.n = 0
+    rec.ri = 0
+    rec.replies[2] = word32(0x0500, 0x4000)
+    testing.assert_eq_i32(dev.err_flag1(), 0x40)
+    testing.assert_eq_i32(rec.last[0], cmd_bank0())
+    testing.assert_eq_i32(rec.last[1], cmd_rd_err1())
+    rec.n = 0
+    rec.ri = 0
+    rec.replies[2] = word32(0x0512, 0x3400)
+    rec.replies[3] = word32(0x0556, 0x7800)
+    testing.assert_eq_i32(dev.serial(), word32(0x5678, 0x1234))
+    testing.assert_eq_i32(rec.last[0], cmd_bank1())
+    testing.assert_eq_i32(rec.last[1], cmd_rd_ser1())
+    rec.n = 0
+    rec.ri = 0
+    rec.replies[2] = word32(0x4000, 0xC100)
+    testing.assert(dev.connected())
 }

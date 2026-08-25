@@ -73,8 +73,24 @@ pub fn cmd_sw_reset(): i32 {
     return word32(0xB400, 0x2098)
 }
 
+pub fn cmd_rd_cmd(): i32 {
+    return word32(0x3400, 0x00DF)
+}
+
 pub fn cmd_whoami(): i32 {
     return word32(0x4000, 0x0091)
+}
+
+pub fn cmd_rd_ser1(): i32 {
+    return word32(0x6400, 0x00A7)
+}
+
+pub fn cmd_rd_ser2(): i32 {
+    return word32(0x6800, 0x00AD)
+}
+
+pub fn cmd_rd_bank(): i32 {
+    return word32(0x7C00, 0x00B3)
 }
 
 pub fn cmd_bank0(): i32 {

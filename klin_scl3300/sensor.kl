@@ -48,16 +48,12 @@ fn and_ok(prev: bool, frame: i32): bool {
     return false
 }
 
-/// SW reset + mode + enable angles. Caller must wait ≥1 ms after power-up first.
-/// Returns WHOAMI data (`0xC1` on a live chip).
-pub fn attach(wire: Wire, mode: i32): Dev {
-    let m = clamp_mode(mode)
-    let dev = Dev{ wire: wire, mode: m }
+fn start(dev: Dev) {
     delay_ms(dev, 1)
     xfer(dev, cmd_bank0())
     xfer(dev, cmd_sw_reset())
     delay_ms(dev, 1)
-    xfer(dev, mode_cmd(m))
+    xfer(dev, mode_cmd(dev.mode))
     xfer(dev, cmd_ena_ang())
     delay_ms(dev, 100)
     xfer(dev, cmd_rd_stat())
@@ -65,7 +61,61 @@ pub fn attach(wire: Wire, mode: i32): Dev {
     xfer(dev, cmd_rd_stat())
     xfer(dev, cmd_whoami())
     xfer(dev, cmd_whoami())
+}
+
+fn read16(dev: Dev, cmd: i32): i32 {
+    xfer(dev, cmd_bank0())
+    xfer(dev, cmd)
+    return frame_data(xfer(dev, cmd))
+}
+
+/// SW reset + mode + enable angles. Caller must wait ≥1 ms after power-up first.
+pub fn attach(wire: Wire, mode: i32): Dev {
+    let dev = Dev{ wire: wire, mode: clamp_mode(mode) }
+    start(dev)
     return dev
+}
+
+/// Same sequence as `attach`, keeping the current mode.
+pub fn (dev: Dev) reset() {
+    start(dev)
+}
+
+/// Change mode `1..=4` (else 4) and write it to the chip.
+pub fn (mut dev: Dev) set_mode(mode: i32) {
+    let m = clamp_mode(mode)
+    let send = dev.wire.xfer
+    send(dev.wire.ctx, mode_cmd(m))
+    dev.mode = m
+}
+
+pub fn (dev: Dev) connected(): bool {
+    return dev.whoami() == whoami_id()
+}
+
+pub fn (dev: Dev) err_flag1(): i32 {
+    return read16(dev, cmd_rd_err1())
+}
+
+pub fn (dev: Dev) err_flag2(): i32 {
+    return read16(dev, cmd_rd_err2())
+}
+
+pub fn (dev: Dev) command_reg(): i32 {
+    return read16(dev, cmd_rd_cmd())
+}
+
+pub fn (dev: Dev) cur_bank(): i32 {
+    return read16(dev, cmd_rd_bank())
+}
+
+/// 32-bit factory serial: `SERIAL2 << 16 | SERIAL1` (Arduino `getSerialNumber`).
+pub fn (dev: Dev) serial(): i32 {
+    xfer(dev, cmd_bank1())
+    xfer(dev, cmd_rd_ser1())
+    let lo = frame_data(xfer(dev, cmd_rd_ser2()))
+    let hi = frame_data(xfer(dev, cmd_bank0()))
+    return word32(hi, lo)
 }
 
 pub fn (dev: Dev) whoami(): i32 {

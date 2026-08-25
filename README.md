@@ -17,7 +17,7 @@ Default measurement mode: **4** (inclinometer, ±10°). Modes 1–2 are full
 ## Install
 
 ```sh
-klin get github/klin-lang/klin_scl3300@v0.1.0
+klin get github/klin-lang/klin_scl3300@v0.2.0
 ```
 
 Repo: https://github.com/klin-lang/klin_scl3300  
@@ -28,15 +28,19 @@ klin test klin_scl3300
 klin run -I. examples/host_smoke.kl
 ```
 
-## API (`@v0.1.0`)
+## API (`@v0.2.0`)
 
 | Symbol | Meaning |
 |---|---|
-| `version(): i32` | `1` at `v0.1.0` |
+| `version(): i32` | `2` at `v0.2.0` |
 | `Wire` | `xfer(i32) → i32` (32-bit word) + `delay_ms` + `ctx` |
 | `attach(wire, mode)` | SW reset, mode, enable angles (mode `1..=4`, else 4) |
 | `read()` | one block: acc / STO / temp / angles / status / WHOAMI |
-| `whoami()` | expect `0xC1` |
+| `whoami()` / `connected()` | expect `0xC1` |
+| `set_mode` / `reset` | change mode; SW reset + re-init |
+| `err_flag1` / `err_flag2` | error flag registers |
+| `serial()` | `SERIAL2 << 16 \| SERIAL1` |
+| `command_reg` / `cur_bank` | `RdCMD` / `RdCurBank` |
 | `angle_mdeg` / `angle_mdeg_360` | datasheet `raw/2^14*90` in millidegrees |
 | `accel_mg(raw, mode)` | milli-g; 6000 / 3000 / 12000 LSB/g |
 | `temp_mC` | `-273 + TEMP/18.9` in milli-°C |
