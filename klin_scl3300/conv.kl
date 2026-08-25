@@ -31,3 +31,8 @@ pub fn temp_mC(raw: i32): i32 {
     let v = sign16(raw)
     return (v * 10000) / 189 - 273000
 }
+
+/// Temperature milli-°F from the same raw TEMP word: `(mC * 9 / 5) + 32000`.
+pub fn temp_mF(raw: i32): i32 {
+    return (temp_mC(raw) * 9) / 5 + 32000
+}

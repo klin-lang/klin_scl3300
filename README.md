@@ -17,7 +17,7 @@ Default measurement mode: **4** (inclinometer, ±10°). Modes 1–2 are full
 ## Install
 
 ```sh
-klin get github/klin-lang/klin_scl3300@v0.2.0
+klin get github/klin-lang/klin_scl3300@v0.3.0
 ```
 
 Repo: https://github.com/klin-lang/klin_scl3300  
@@ -28,22 +28,23 @@ klin test klin_scl3300
 klin run -I. examples/host_smoke.kl
 ```
 
-## API (`@v0.2.0`)
+## API (`@v0.3.0`)
 
 | Symbol | Meaning |
 |---|---|
-| `version(): i32` | `2` at `v0.2.0` |
+| `version(): i32` | `3` at `v0.3.0` |
 | `Wire` | `xfer(i32) → i32` (32-bit word) + `delay_ms` + `ctx` |
-| `attach(wire, mode)` | SW reset, mode, enable angles (mode `1..=4`, else 4) |
+| `attach(wire, mode): !Dev` | SW reset, mode, enable angles; `error(err_whoami())` if last WHOAMI ≠ `0xC1` |
 | `read()` | one block: acc / STO / temp / angles / status / WHOAMI |
 | `whoami()` / `connected()` | expect `0xC1` |
-| `set_mode` / `reset` | change mode; SW reset + re-init |
+| `set_mode` / `reset(): !i32` | change mode; SW reset + re-init (WHOAMI or `err_whoami`) |
+| `err_whoami()` | `1` — WHOAMI mismatch after `attach` / `reset` |
 | `err_flag1` / `err_flag2` | error flag registers |
 | `serial()` | `SERIAL2 << 16 \| SERIAL1` |
 | `command_reg` / `cur_bank` | `RdCMD` / `RdCurBank` |
 | `angle_mdeg` / `angle_mdeg_360` | datasheet `raw/2^14*90` in millidegrees |
 | `accel_mg(raw, mode)` | milli-g; 6000 / 3000 / 12000 LSB/g |
-| `temp_mC` | `-273 + TEMP/18.9` in milli-°C |
+| `temp_mC` / `temp_mF` | datasheet milli-°C; Fahrenheit is `(mC * 9 / 5) + 32000` |
 | `crc8_frame` / `frame_*` | Murata CRC-8 and MISO parse |
 | `power_down` / `wake` | chip commands |
 
@@ -66,10 +67,13 @@ fn wait_ms(ctx: *mut u8, ms: i32) {
 
 fn main() {
     let wire = scl.Wire{ ctx: cast(*mut u8, 0), xfer: spi32, delay_ms: wait_ms }
-    let imu = scl.attach(wire, 4)
+    let imu = scl.attach(wire, 4) or {
+        printf("scl3300 whoami fail err=%d\n", err)
+        return
+    }
     let s = imu.read()
     if s.ok() {
-        printf("tilt_x_mdeg %d\n", scl.angle_mdeg(s.ang_x))
+        printf("tilt_x_mdeg %d temp_mF %d\n", scl.angle_mdeg(s.ang_x), scl.temp_mF(s.temp))
     }
 }
 ```

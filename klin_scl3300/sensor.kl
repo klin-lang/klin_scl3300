@@ -48,7 +48,8 @@ fn and_ok(prev: bool, frame: i32): bool {
     return false
 }
 
-fn start(dev: Dev) {
+/// SW reset + mode + enable angles. Returns the last WHOAMI data word.
+fn start(dev: Dev): i32 {
     delay_ms(dev, 1)
     xfer(dev, cmd_bank0())
     xfer(dev, cmd_sw_reset())
@@ -60,7 +61,7 @@ fn start(dev: Dev) {
     xfer(dev, cmd_rd_stat())
     xfer(dev, cmd_rd_stat())
     xfer(dev, cmd_whoami())
-    xfer(dev, cmd_whoami())
+    return frame_data(xfer(dev, cmd_whoami()))
 }
 
 fn read16(dev: Dev, cmd: i32): i32 {
@@ -69,16 +70,24 @@ fn read16(dev: Dev, cmd: i32): i32 {
     return frame_data(xfer(dev, cmd))
 }
 
-/// SW reset + mode + enable angles. Caller must wait ≥1 ms after power-up first.
-pub fn attach(wire: Wire, mode: i32): Dev {
+/// SW reset + mode + enable angles. `error(err_whoami())` if last WHOAMI ≠ `0xC1`.
+/// Caller must wait ≥1 ms after power-up first.
+pub fn attach(wire: Wire, mode: i32): !Dev {
     let dev = Dev{ wire: wire, mode: clamp_mode(mode) }
-    start(dev)
+    let id = start(dev)
+    if id != whoami_id() {
+        return error(err_whoami())
+    }
     return dev
 }
 
-/// Same sequence as `attach`, keeping the current mode.
-pub fn (dev: Dev) reset() {
-    start(dev)
+/// Same sequence as `attach`, keeping the current mode. Returns WHOAMI or `error(err_whoami())`.
+pub fn (dev: Dev) reset(): !i32 {
+    let id = start(dev)
+    if id != whoami_id() {
+        return error(err_whoami())
+    }
+    return id
 }
 
 /// Change mode `1..=4` (else 4) and write it to the chip.
