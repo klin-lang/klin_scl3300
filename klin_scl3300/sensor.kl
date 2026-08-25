@@ -1,0 +1,123 @@
+module klin_scl3300
+
+/// 32-bit SPI, Mode 0, MSB first, ≤4 MHz. Off-frame: MISO is the previous command.
+/// The app owns CS (low for 32 clocks, high ≥10 µs between frames).
+pub struct Wire {
+    ctx: *mut u8
+    xfer: fn(*mut u8,i32):i32
+    delay_ms: fn(*mut u8,i32):void
+}
+
+pub struct Dev {
+    wire: Wire
+    mode: i32
+}
+
+/// One consistent sample (datasheet: read the block together). Raw 16-bit words.
+pub struct Sample {
+    acc_x: i32
+    acc_y: i32
+    acc_z: i32
+    sto: i32
+    temp: i32
+    ang_x: i32
+    ang_y: i32
+    ang_z: i32
+    status: i32
+    whoami: i32
+    crc_ok: bool
+    rs_ok: bool
+}
+
+fn xfer(dev: Dev, word: i32): i32 {
+    let f = dev.wire.xfer
+    return f(dev.wire.ctx, word)
+}
+
+fn delay_ms(dev: Dev, ms: i32) {
+    let f = dev.wire.delay_ms
+    f(dev.wire.ctx, ms)
+}
+
+fn and_ok(prev: bool, frame: i32): bool {
+    if prev {
+        if frame_crc_ok(frame) {
+            return frame_rs_ok(frame)
+        }
+    }
+    return false
+}
+
+/// SW reset + mode + enable angles. Caller must wait ≥1 ms after power-up first.
+/// Returns WHOAMI data (`0xC1` on a live chip).
+pub fn attach(wire: Wire, mode: i32): Dev {
+    let m = clamp_mode(mode)
+    let dev = Dev{ wire: wire, mode: m }
+    delay_ms(dev, 1)
+    xfer(dev, cmd_bank0())
+    xfer(dev, cmd_sw_reset())
+    delay_ms(dev, 1)
+    xfer(dev, mode_cmd(m))
+    xfer(dev, cmd_ena_ang())
+    delay_ms(dev, 100)
+    xfer(dev, cmd_rd_stat())
+    xfer(dev, cmd_rd_stat())
+    xfer(dev, cmd_rd_stat())
+    xfer(dev, cmd_whoami())
+    xfer(dev, cmd_whoami())
+    return dev
+}
+
+pub fn (dev: Dev) whoami(): i32 {
+    xfer(dev, cmd_bank0())
+    xfer(dev, cmd_whoami())
+    let frame = xfer(dev, cmd_whoami())
+    return frame_data(frame)
+}
+
+/// Acc / STO / temp / angles / status / WHOAMI. Off-frame pipeline like the datasheet.
+pub fn (dev: Dev) read(): Sample {
+    let mut ok = true
+    xfer(dev, cmd_bank0())
+    xfer(dev, cmd_rd_acc_x())
+    let f_ax = xfer(dev, cmd_rd_acc_y())
+    ok = and_ok(ok, f_ax)
+    let f_ay = xfer(dev, cmd_rd_acc_z())
+    ok = and_ok(ok, f_ay)
+    let f_az = xfer(dev, cmd_rd_sto())
+    ok = and_ok(ok, f_az)
+    let f_sto = xfer(dev, cmd_rd_temp())
+    ok = and_ok(ok, f_sto)
+    let f_temp = xfer(dev, cmd_rd_ang_x())
+    ok = and_ok(ok, f_temp)
+    let f_angx = xfer(dev, cmd_rd_ang_y())
+    ok = and_ok(ok, f_angx)
+    let f_angy = xfer(dev, cmd_rd_ang_z())
+    ok = and_ok(ok, f_angy)
+    let f_angz = xfer(dev, cmd_rd_stat())
+    ok = and_ok(ok, f_angz)
+    let f_stat = xfer(dev, cmd_whoami())
+    ok = and_ok(ok, f_stat)
+    let f_who = xfer(dev, cmd_whoami())
+    ok = and_ok(ok, f_who)
+    return Sample{ acc_x: sign16(frame_data(f_ax)), acc_y: sign16(frame_data(f_ay)), acc_z: sign16(frame_data(f_az)), sto: sign16(frame_data(f_sto)), temp: sign16(frame_data(f_temp)), ang_x: sign16(frame_data(f_angx)), ang_y: sign16(frame_data(f_angy)), ang_z: sign16(frame_data(f_angz)), status: frame_data(f_stat), whoami: frame_data(f_who), crc_ok: ok, rs_ok: ok }
+}
+
+pub fn (dev: Dev) power_down() {
+    xfer(dev, cmd_bank0())
+    xfer(dev, cmd_power_down())
+}
+
+/// Wake uses the same MOSI word as mode 1 (`0xB400001F`).
+pub fn (dev: Dev) wake() {
+    xfer(dev, cmd_mode1())
+}
+
+pub fn (s: Sample) ok(): bool {
+    if s.crc_ok {
+        if s.rs_ok {
+            return s.whoami == whoami_id()
+        }
+    }
+    return false
+}

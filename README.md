@@ -1,2 +1,84 @@
 # klin_scl3300
-Klin SCL3300 inclinometer chip driver (32-bit SPI)
+
+Klin chip driver for the **Murata SCL3300-D01** 3-axis inclinometer (32-bit
+SPI, off-frame).
+
+Not the Arduino `DavidArmstrong/SCL3300` class, not in the Klin stdlib. The
+app owns the bus (`machine_*` `Spi` + `Pin`, or any other C/Klin hooks). This
+package sends 32-bit frames and converts raw registers.
+
+Default measurement mode: **4** (inclinometer, ±10°). Modes 1–2 are full
+±90° / 360° accel-style ranges; 3 is also ±10°.
+
+## Requirements
+
+- [Klin](https://github.com/klin-lang/klin) compiler
+
+## Install
+
+```sh
+klin get github/klin-lang/klin_scl3300@v0.1.0
+```
+
+Repo: https://github.com/klin-lang/klin_scl3300  
+Local: `-I` this tree or a sibling `klin_scl3300/`.
+
+```sh
+klin test klin_scl3300
+klin run -I. examples/host_smoke.kl
+```
+
+## API (`@v0.1.0`)
+
+| Symbol | Meaning |
+|---|---|
+| `version(): i32` | `1` at `v0.1.0` |
+| `Wire` | `xfer(i32) → i32` (32-bit word) + `delay_ms` + `ctx` |
+| `attach(wire, mode)` | SW reset, mode, enable angles (mode `1..=4`, else 4) |
+| `read()` | one block: acc / STO / temp / angles / status / WHOAMI |
+| `whoami()` | expect `0xC1` |
+| `angle_mdeg` / `angle_mdeg_360` | datasheet `raw/2^14*90` in millidegrees |
+| `accel_mg(raw, mode)` | milli-g; 6000 / 3000 / 12000 LSB/g |
+| `temp_mC` | `-273 + TEMP/18.9` in milli-°C |
+| `crc8_frame` / `frame_*` | Murata CRC-8 and MISO parse |
+| `power_down` / `wake` | chip commands |
+
+No heap, no Arduino `SPIClass`, no Fast Read (keep-CS-low). SPI: **Mode 0**,
+MSB first, **≤ 4 MHz**. CS low for the 32 clocks, high **≥ 10 µs** between
+frames — that gap belongs in `xfer`.
+
+### Wire
+
+```klin
+import klin_scl3300 scl
+
+fn spi32(ctx: *mut u8, mos: i32): i32 {
+    // CS low, write 32 bits, read 32 bits, CS high, wait ≥10 µs
+    return 0
+}
+
+fn wait_ms(ctx: *mut u8, ms: i32) {
+}
+
+fn main() {
+    let wire = scl.Wire{ ctx: cast(*mut u8, 0), xfer: spi32, delay_ms: wait_ms }
+    let imu = scl.attach(wire, 4)
+    let s = imu.read()
+    if s.ok() {
+        printf("tilt_x_mdeg %d\n", scl.angle_mdeg(s.ang_x))
+    }
+}
+```
+
+`read()` is off-frame: each MISO word is the answer to the **previous** MOSI
+command. The first response after reset is discarded inside `attach`.
+
+## Protocol notes
+
+Commands are the datasheet 32-bit words (CRC already in the low byte), same
+hex as `SCL3300.h`. This is not a port of that library's C++ class.
+
+## Layout
+
+Directory `klin_scl3300/` is one module. `*_test.kl` stays out of
+`import klin_scl3300`.

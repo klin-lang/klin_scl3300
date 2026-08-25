@@ -1,0 +1,113 @@
+module klin_scl3300
+
+/// Fixed 32-bit MOSI frames from the SCL3300-D01 datasheet (CRC included).
+pub fn cmd_rd_acc_x(): i32 {
+    return word32(0x0400, 0x00F7)
+}
+
+pub fn cmd_rd_acc_y(): i32 {
+    return word32(0x0800, 0x00FD)
+}
+
+pub fn cmd_rd_acc_z(): i32 {
+    return word32(0x0C00, 0x00FB)
+}
+
+pub fn cmd_rd_sto(): i32 {
+    return word32(0x1000, 0x00E9)
+}
+
+pub fn cmd_ena_ang(): i32 {
+    return word32(0xB000, 0x1F6F)
+}
+
+pub fn cmd_rd_ang_x(): i32 {
+    return word32(0x2400, 0x00C7)
+}
+
+pub fn cmd_rd_ang_y(): i32 {
+    return word32(0x2800, 0x00CD)
+}
+
+pub fn cmd_rd_ang_z(): i32 {
+    return word32(0x2C00, 0x00CB)
+}
+
+pub fn cmd_rd_temp(): i32 {
+    return word32(0x1400, 0x00EF)
+}
+
+pub fn cmd_rd_stat(): i32 {
+    return word32(0x1800, 0x00E5)
+}
+
+pub fn cmd_rd_err1(): i32 {
+    return word32(0x1C00, 0x00E3)
+}
+
+pub fn cmd_rd_err2(): i32 {
+    return word32(0x2000, 0x00C1)
+}
+
+pub fn cmd_mode1(): i32 {
+    return word32(0xB400, 0x001F)
+}
+
+pub fn cmd_mode2(): i32 {
+    return word32(0xB400, 0x0102)
+}
+
+pub fn cmd_mode3(): i32 {
+    return word32(0xB400, 0x0225)
+}
+
+pub fn cmd_mode4(): i32 {
+    return word32(0xB400, 0x0338)
+}
+
+pub fn cmd_power_down(): i32 {
+    return word32(0xB400, 0x046B)
+}
+
+pub fn cmd_sw_reset(): i32 {
+    return word32(0xB400, 0x2098)
+}
+
+pub fn cmd_whoami(): i32 {
+    return word32(0x4000, 0x0091)
+}
+
+pub fn cmd_bank0(): i32 {
+    return word32(0xFC00, 0x0073)
+}
+
+pub fn cmd_bank1(): i32 {
+    return word32(0xFC00, 0x016E)
+}
+
+pub fn whoami_id(): i32 {
+    return 0xC1
+}
+
+/// Mode `1..=4`. Anything else → mode 4 (inclinometer, ±10°).
+pub fn mode_cmd(mode: i32): i32 {
+    if mode == 1 {
+        return cmd_mode1()
+    }
+    if mode == 2 {
+        return cmd_mode2()
+    }
+    if mode == 3 {
+        return cmd_mode3()
+    }
+    return cmd_mode4()
+}
+
+pub fn clamp_mode(mode: i32): i32 {
+    if mode >= 1 {
+        if mode <= 4 {
+            return mode
+        }
+    }
+    return 4
+}
