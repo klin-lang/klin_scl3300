@@ -105,6 +105,11 @@ pub fn whoami_id(): i32 {
     return 0xC1
 }
 
+/// `attach` / `reset` error: last WHOAMI word is not `0xC1`.
+pub fn err_whoami(): i32 {
+    return 1
+}
+
 /// Mode `1..=4`. Anything else → mode 4 (inclinometer, ±10°).
 pub fn mode_cmd(mode: i32): i32 {
     if mode == 1 {

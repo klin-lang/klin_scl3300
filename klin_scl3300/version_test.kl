@@ -32,8 +32,20 @@ fn mock_wire(rec: *mut Rec): Wire {
     return Wire{ ctx: cast(*mut u8, rec), xfer: rec_xfer, delay_ms: rec_delay }
 }
 
+fn whoami_frame(): i32 {
+    return word32(0x4000, 0xC100)
+}
+
+fn must_attach(rec: *mut Rec, mode: i32): Dev {
+    (*rec).replies[8] = whoami_frame()
+    return attach(mock_wire(rec), mode) or {
+        testing.assert(false)
+        Dev{ wire: mock_wire(rec), mode: clamp_mode(mode) }
+    }
+}
+
 fn test_version() {
-    testing.assert_eq_i32(version(), 2)
+    testing.assert_eq_i32(version(), 3)
 }
 
 fn test_crc_datasheet() {
@@ -49,13 +61,14 @@ fn test_conv_datasheet() {
     testing.assert_eq_i32(angle_mdeg(3976), 21840)
     testing.assert_eq_i32(accel_mg(220, 1), 36)
     testing.assert_eq_i32(temp_mC(5662), 26576)
+    testing.assert_eq_i32(temp_mF(5662), 79836)
     testing.assert_eq_i32(clamp_mode(0), 4)
     testing.assert_eq_i32(clamp_mode(4), 4)
 }
 
 fn test_attach_mode4() {
     let mut rec = Rec{ last: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], n: 0, replies: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], ri: 0, delays: 0 }
-    let dev = attach(mock_wire(&rec), 4)
+    let dev = must_attach(&rec, 4)
     testing.assert_eq_i32(dev.mode, 4)
     testing.assert_eq_i32(rec.last[0], cmd_bank0())
     testing.assert_eq_i32(rec.last[1], cmd_sw_reset())
@@ -64,9 +77,18 @@ fn test_attach_mode4() {
     testing.assert(rec.delays >= 102)
 }
 
+fn test_attach_bad_whoami() {
+    let mut rec = Rec{ last: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], n: 0, replies: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], ri: 0, delays: 0 }
+    let d = attach(mock_wire(&rec), 4) or {
+        testing.assert_eq_i32(err, err_whoami())
+        Dev{ wire: mock_wire(&rec), mode: 99 }
+    }
+    testing.assert_eq_i32(d.mode, 99)
+}
+
 fn test_read_angles() {
     let mut rec = Rec{ last: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], n: 0, replies: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], ri: 0, delays: 0 }
-    let dev = attach(mock_wire(&rec), 4)
+    let dev = must_attach(&rec, 4)
     rec.n = 0
     rec.ri = 0
     rec.replies[0] = 0
@@ -90,13 +112,19 @@ fn test_read_angles() {
 
 fn test_set_mode_and_reset() {
     let mut rec = Rec{ last: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], n: 0, replies: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], ri: 0, delays: 0 }
-    let mut dev = attach(mock_wire(&rec), 4)
+    let mut dev = must_attach(&rec, 4)
     rec.n = 0
     dev.set_mode(1)
     testing.assert_eq_i32(dev.mode, 1)
     testing.assert_eq_i32(rec.last[0], cmd_mode1())
     rec.n = 0
-    dev.reset()
+    rec.ri = 0
+    rec.replies[8] = whoami_frame()
+    let id = dev.reset() or {
+        testing.assert(false)
+        0
+    }
+    testing.assert_eq_i32(id, whoami_id())
     testing.assert_eq_i32(rec.last[0], cmd_bank0())
     testing.assert_eq_i32(rec.last[1], cmd_sw_reset())
     testing.assert_eq_i32(rec.last[2], cmd_mode1())
@@ -104,7 +132,7 @@ fn test_set_mode_and_reset() {
 
 fn test_err_flags_and_serial() {
     let mut rec = Rec{ last: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], n: 0, replies: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], ri: 0, delays: 0 }
-    let dev = attach(mock_wire(&rec), 4)
+    let dev = must_attach(&rec, 4)
     rec.n = 0
     rec.ri = 0
     rec.replies[2] = word32(0x0500, 0x4000)

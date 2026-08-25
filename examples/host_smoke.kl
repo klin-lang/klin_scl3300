@@ -6,6 +6,7 @@ fn main() {
     printf("whoami %d\n", scl.whoami_id())
     printf("crc %d\n", scl.crc8_frame(0x040000F7))
     printf("ang_mdeg %d\n", scl.angle_mdeg(3976))
+    printf("temp_mF %d\n", scl.temp_mF(5662))
     printf("mode4 %d\n", scl.cmd_mode4())
     printf("ser1 %d\n", scl.cmd_rd_ser1())
 }

@@ -1,6 +1,6 @@
 module klin_scl3300
 
-/// Package version for `v0.2.0`.
+/// Package version for `v0.3.0`.
 pub fn version(): i32 {
-    return 2
+    return 3
 }
