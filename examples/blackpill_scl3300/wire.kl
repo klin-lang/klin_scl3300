@@ -1,0 +1,65 @@
+/// STM32 SPI1 + CS adapter for klin_scl3300 `Wire` (32-bit words).
+/// CS low for 32 clocks, then high ≥10 µs — same cost as Arduino SPI + library.
+module app
+import "github/klin-lang/machine_stm32" machine
+import klin_scl3300 scl
+
+struct Bus {
+    spi: machine.Spi
+    cs: machine.Pin
+}
+
+fn busy_ms(ms: i32) {
+    let mut n = ms * 4000
+    while n > 0 {
+        n = n - 1
+    }
+}
+
+fn busy_us(us: i32) {
+    let mut n = us * 4
+    while n > 0 {
+        n = n - 1
+    }
+}
+
+fn spi32(ctx: *mut u8, mos: i32): i32 {
+    let bus = cast(*mut Bus, ctx)
+    let s = (*bus).spi
+    (*bus).cs.low()
+    let r0 = s.write_read_u8((mos >> 24) & 255)
+    let r1 = s.write_read_u8((mos >> 16) & 255)
+    let r2 = s.write_read_u8((mos >> 8) & 255)
+    let r3 = s.write_read_u8(mos & 255)
+    (*bus).cs.high()
+    busy_us(10)
+    return (r0 << 24) | (r1 << 16) | (r2 << 8) | r3
+}
+
+fn wait_ms(ctx: *mut u8, ms: i32) {
+    busy_ms(ms)
+}
+
+fn bus_spi1_cs_pb12(): Bus {
+    return Bus{
+        spi: machine.spi_out(
+            1,
+            machine.Port.A, 5, 5,
+            machine.Port.A, 6, 5,
+            machine.Port.A, 7, 5,
+            16000000,
+            1000000,
+            0
+        ),
+        cs: machine.pin_out(machine.Port.B, 12)
+    }
+}
+
+fn attach_imu(bus: *mut Bus, mode: i32): !scl.Dev {
+    (*bus).cs.high()
+    return scl.attach(scl.Wire{
+        ctx: cast(*mut u8, bus),
+        xfer: spi32,
+        delay_ms: wait_ms
+    }, mode)
+}

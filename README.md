@@ -28,6 +28,9 @@ klin test klin_scl3300
 klin run -I. examples/host_smoke.kl
 ```
 
+Board sketch (Arduino + Klin, WeAct F411CE, CS=PB12):
+[`examples/blackpill_scl3300/`](examples/blackpill_scl3300/).
+
 ## API (`@v0.3.0`)
 
 | Symbol | Meaning |
