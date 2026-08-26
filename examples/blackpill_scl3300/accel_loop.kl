@@ -1,0 +1,79 @@
+/// WeAct Black Pill + SCL3300 — same job as accel_loop.ino.
+/// Mode 1 + accel_mg → milli-g (Arduino float g × 1000). Bus in wire.kl.
+module app
+import "github/klin-lang/machine_stm32" machine
+import klin_scl3300 scl
+
+fn uart_put_i32(u: machine.Uart, raw: i32) {
+    let mut v = raw
+    if v < 0 {
+        u.write_u8(45)
+        v = 0 - v
+    }
+    let mut pow = 1
+    let mut t = v
+    while t >= 10 {
+        pow = pow * 10
+        t = t / 10
+    }
+    while pow > 0 {
+        u.write_u8(48 + (v / pow))
+        v = v - (v / pow) * pow
+        pow = pow / 10
+    }
+}
+
+fn uart_puts(u: machine.Uart, xs: []i32) {
+    let mut i = 0
+    while i < xs.len {
+        u.write_u8(xs[i])
+        i = i + 1
+    }
+}
+
+@[link("startup.s")]
+fn main() {
+    let mut bus = bus_spi1_cs_pb12()
+    let u = machine.uart_out(
+        1,
+        machine.Port.A, 9, 7,
+        machine.Port.A, 10, 7,
+        16000000,
+        115200
+    )
+
+    let imu = attach_imu(&bus, 1) or {
+        let fail: [10]i32 = [87, 72, 79, 65, 77, 73, 32, 101, 114, 114]
+        uart_puts(u, fail[:])
+        u.write_u8(10)
+        while true {
+        }
+        scl.Dev{
+            wire: scl.Wire{ ctx: cast(*mut u8, 0), xfer: spi32, delay_ms: wait_ms },
+            mode: 1
+        }
+    }
+
+    let lab_x: [3]i32 = [88, 58, 32]
+    let lab_y: [4]i32 = [9, 89, 58, 32]
+    let lab_z: [4]i32 = [9, 90, 58, 32]
+    let mg: [3]i32 = [32, 109, 103]
+
+    while true {
+        let s = imu.read()
+        if s.ok() {
+            let ax = scl.accel_mg(s.acc_x, 1)
+            let ay = scl.accel_mg(s.acc_y, 1)
+            let az = scl.accel_mg(s.acc_z, 1)
+            uart_puts(u, lab_x[:])
+            uart_put_i32(u, ax)
+            uart_puts(u, lab_y[:])
+            uart_put_i32(u, ay)
+            uart_puts(u, lab_z[:])
+            uart_put_i32(u, az)
+            uart_puts(u, mg[:])
+            u.write_u8(10)
+        }
+        busy_ms(500)
+    }
+}
